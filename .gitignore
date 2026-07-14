@@ -1,0 +1,36 @@
+# Environment variables
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# Database
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node.js
+node_modules/
+dist/
+
+# Uploads (optional - uncomment if you don't want to track uploads)
+# uploads/
+
+# Logs
+*.log
+
+# Coverage
+coverage/
