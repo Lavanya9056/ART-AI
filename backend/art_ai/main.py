@@ -38,3 +38,9 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(image_router)
 app.include_router(ai_router)
+@app.get("/debug")
+def debug():
+    return {
+        "frontend_url": FRONTEND_URL,
+        "origins": [FRONTEND_URL, "http://127.0.0.1:5173", "http://localhost:5173"]
+    }
