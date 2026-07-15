@@ -47,3 +47,6 @@ def debug():
         "frontend_url": FRONTEND_URL,
         "origins": [FRONTEND_URL, "http://127.0.0.1:5173", "http://localhost:5173"]
     }
+@app.on_event("startup")
+def startup():
+    Base.metadata.create_all(bind=engine)
