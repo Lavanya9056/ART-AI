@@ -1,5 +1,7 @@
 import os
 from pathlib import Path
+from art_ai.database import Base, engine
+from art_ai.models import user, image
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,7 +34,8 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 GENERATED_DIR = UPLOADS_DIR / "generated"
 GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads/generated", StaticFiles(directory=str(GENERATED_DIR)), name="generated")
-
+# Create database tables
+Base.metadata.create_all(bind=engine)
 app.include_router(home_router)
 app.include_router(auth_router)
 app.include_router(users_router)
