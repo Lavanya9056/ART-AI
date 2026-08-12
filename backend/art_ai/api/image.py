@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,8 +6,6 @@ from sqlalchemy import select
 from art_ai.database import get_db
 from art_ai.dependencies.auth import get_current_user
 from art_ai.models.image import Image
-
-UPLOADS_DIR = Path(__file__).resolve().parents[3] / "uploads"
 
 router = APIRouter()
 
@@ -26,14 +23,11 @@ def delete_image(image_id: int, current_user=Depends(get_current_user)):
         if image.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Unauthorized")
 
-        filepath = UPLOADS_DIR / image.filename
-
+        filepath = Path(image.filepath)
         if filepath.exists():
             filepath.unlink()
 
         db.delete(image)
         db.commit()
 
-        return {
-            "message": "Image deleted successfully"
-        }
+        return {"message": "Image deleted successfully"}

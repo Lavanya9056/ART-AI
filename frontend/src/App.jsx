@@ -1,296 +1,174 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import HomePage from './pages/HomePage';
-import ScannerPage from './pages/ScannerPage';
-import SimulationPage from './pages/SimulationPage';
-import CompliancePage from './pages/CompliancePage';
-import ChatPage from './pages/ChatPage';
 
-const navItems = [
-  { id: 'home', label: 'Overview' },
-  { id: 'scanner', label: 'Scanner' },
-  { id: 'simulation', label: 'Simulation' },
-  { id: 'compliance', label: 'Compliance' },
-  { id: 'chat', label: 'Copilot' }
+const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+const NAV = [
+  { group: 'OPERATIONS', items: [
+    { id: 'home',       label: 'Overview',    icon: '⬡' },
+    { id: 'scanner',    label: 'Scanner',     icon: '⬡' },
+    { id: 'simulation', label: 'Simulation',  icon: '⬡' },
+    { id: 'compliance', label: 'Compliance',  icon: '⬡' },
+  ]},
+  { group: 'INTELLIGENCE', items: [
+    { id: 'chat',       label: 'AI Copilot',  icon: '⬡' },
+  ]},
+  { group: 'AI STUDIO', items: [
+    { id: 'studio',     label: 'Image Studio',icon: '⬡' },
+  ]},
 ];
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-
-function App() {
-  const [activeView, setActiveView] = useState('home');
-  const [authMode, setAuthMode] = useState('login');
-  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' });
-  const [authMessage, setAuthMessage] = useState('');
-  const [authMessageType, setAuthMessageType] = useState('error'); // 'error' or 'success'
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [token, setToken] = useState('');
-  const [user, setUser] = useState(null);
+function AuthScreen({ onAuth }) {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
-  const [apiStatus, setApiStatus] = useState('checking');
-  const [activityLog, setActivityLog] = useState([
-    { id: 1, text: 'System initialized', detail: 'Ready for authentication.', time: 'just now' }
-  ]);
+  const [msg, setMsg] = useState({ text: '', type: '' });
 
-  const addActivity = (text, detail) => {
-    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setActivityLog((prev) => [{ id: Date.now(), text, detail, time: timestamp }, ...prev].slice(0, 6));
-  };
-
-  const handleLogout = (reason = 'Signed out.') => {
-    localStorage.removeItem('art_ai_token');
-    setToken('');
-    setUser(null);
-    setIsAuthenticated(false);
-    setAuthMessage(reason);
-    setActiveView('home');
-    addActivity('Session ended', reason);
-  };
-
-  const checkApiHealth = async () => {
-    setApiStatus('checking');
-    try {
-      await axios.get(`${API_BASE_URL}/health`, { timeout: 4000 });
-      setApiStatus('online');
-      addActivity('Connection established', 'Backend API is online.');
-    } catch (error) {
-      setApiStatus('offline');
-      addActivity('Connection failed', 'Unable to reach backend API.');
-    }
-  };
-
-  const loadUser = async (currentToken) => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/users/me`, {
-        headers: { Authorization: `Bearer ${currentToken}` }
-      });
-      setUser(response.data);
-    } catch (error) {
-      if (error.response?.status === 401) {
-        handleLogout('Session expired. Please sign in again.');
-      } else {
-        handleLogout('Unable to verify session. Please sign in again.');
-      }
-    }
-  };
-
-  useEffect(() => {
-    checkApiHealth();
-
-    const storedToken = localStorage.getItem('art_ai_token');
-    if (storedToken) {
-      setToken(storedToken);
-      setIsAuthenticated(true);
-      loadUser(storedToken);
-    }
-  }, []);
-
-  const handleAuthSubmit = async (event) => {
-    event.preventDefault();
+  const submit = async (e) => {
+    e.preventDefault();
     setLoading(true);
-    setAuthMessage('');
-
+    setMsg({ text: '', type: '' });
     try {
-      const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
-      const payload = authMode === 'login'
-        ? { email: authForm.email, password: authForm.password }
-        : { name: authForm.name, email: authForm.email, password: authForm.password };
-
-      const response = await axios.post(`${API_BASE_URL}${endpoint}`, payload);
-
-      if (authMode === 'register') {
-        setAuthMode('login');
-        setAuthForm((prev) => ({ ...prev, name: '', password: '' }));
-        setAuthMessage('Account created successfully. Please sign in.');
-        setAuthMessageType('success');
+      if (mode === 'register') {
+        await axios.post(`${API}/auth/register`, form);
+        setMode('login');
+        setForm(f => ({ ...f, name: '', password: '' }));
+        setMsg({ text: 'Account created. Sign in to continue.', type: 'ok' });
       } else {
-        const nextToken = response.data.access_token;
-        localStorage.setItem('art_ai_token', nextToken);
-        setToken(nextToken);
-        setIsAuthenticated(true);
-        await loadUser(nextToken);
-        setAuthMessage('Welcome back!');
-        setAuthMessageType('success');
-        addActivity('Authenticated', 'Session started successfully.');
+        const res = await axios.post(`${API}/auth/login`, { email: form.email, password: form.password });
+        const tok = res.data.access_token;
+        localStorage.setItem('art_ai_token', tok);
+        const user = await axios.get(`${API}/users/me`, { headers: { Authorization: `Bearer ${tok}` } });
+        onAuth(tok, user.data);
       }
-    } catch (error) {
-      const errorMsg = error.response?.data?.detail || 'Authentication failed. Please check your credentials.';
-      setAuthMessage(errorMsg);
-      setAuthMessageType('error');
+    } catch (err) {
+      setMsg({ text: err.response?.data?.detail || 'Authentication failed.', type: 'err' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (field, value) => {
-    setAuthForm((prev) => ({ ...prev, [field]: value }));
-    if (authMessage) setAuthMessage('');
-  };
-
-  const handleAuthModeChange = (mode) => {
-    setAuthMode(mode);
-    setAuthMessage('');
-    setAuthForm({ name: '', email: '', password: '' });
-  };
-
-  const renderView = () => {
-    switch (activeView) {
-      case 'scanner':
-        return <ScannerPage token={token} />;
-      case 'simulation':
-        return <SimulationPage token={token} />;
-      case 'compliance':
-        return <CompliancePage token={token} />;
-      case 'chat':
-        return <ChatPage token={token} />;
-      default:
-        return <HomePage token={token} />;
-    }
-  };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="app-shell">
-        <div className="aurora aurora-one" />
-        <div className="aurora aurora-two" />
-        <div className="grid-glow" />
-
-        <div className="auth-panel">
-          <div className="eyebrow">ART-AI / Access Portal</div>
-          <h2>{authMode === 'login' ? 'Sign in to continue' : 'Create your operator account'}</h2>
-          <p>Secure your workspace and unlock the protected workflows behind the dashboard.</p>
-
-          <div className="auth-switch">
-            <button
-              type="button"
-              className={`auth-toggle ${authMode === 'login' ? 'active' : ''}`}
-              onClick={() => handleAuthModeChange('login')}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              className={`auth-toggle ${authMode === 'register' ? 'active' : ''}`}
-              onClick={() => handleAuthModeChange('register')}
-            >
-              Register
-            </button>
-          </div>
-
-          <form className="auth-form" onSubmit={handleAuthSubmit}>
-            {authMode === 'register' && (
-              <input
-                className="auth-field"
-                type="text"
-                placeholder="Full name"
-                value={authForm.name}
-                onChange={(event) => handleInputChange('name', event.target.value)}
-                required
-              />
-            )}
-
-            <input
-              className="auth-field"
-              type="email"
-              placeholder="Email address"
-              value={authForm.email}
-              onChange={(event) => handleInputChange('email', event.target.value)}
-              required
-            />
-
-            <input
-              className="auth-field"
-              type="password"
-              placeholder="Password (min 8 characters)"
-              value={authForm.password}
-              onChange={(event) => handleInputChange('password', event.target.value)}
-              required
-              minLength={8}
-            />
-
-            <button className="generate-btn" type="submit" disabled={loading}>
-              {loading ? 'Authenticating...' : authMode === 'login' ? 'Sign in' : 'Create account'}
-            </button>
-          </form>
-
-          {authMessage && (
-            <p className={`status-text ${authMessageType === 'success' ? 'success' : ''}`}>
-              {authMessage}
-            </p>
-          )}
+  return (
+    <div className="auth-screen">
+      <div className="aurora aurora-one" />
+      <div className="aurora aurora-two" />
+      <div className="auth-card">
+        <div className="eyebrow">ART-AI / Access Portal</div>
+        <h2>{mode === 'login' ? 'Sign in to continue' : 'Create operator account'}</h2>
+        <p className="sub">Autonomous Red Team Intelligence — Authorized operators only.</p>
+        <div className="auth-tabs">
+          <button className={`auth-tab${mode === 'login' ? ' active' : ''}`} onClick={() => { setMode('login'); setMsg({ text: '', type: '' }); }}>Sign In</button>
+          <button className={`auth-tab${mode === 'register' ? ' active' : ''}`} onClick={() => { setMode('register'); setMsg({ text: '', type: '' }); }}>Register</button>
         </div>
+        <form className="auth-form" onSubmit={submit}>
+          {mode === 'register' && (
+            <div className="field"><label>Full name</label><input type="text" placeholder="Your name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required /></div>
+          )}
+          <div className="field"><label>Email</label><input type="email" placeholder="operator@artai.io" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required /></div>
+          <div className="field"><label>Password</label><input type="password" placeholder="Minimum 8 characters" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required minLength={8} /></div>
+          <button type="submit" className="btn btn-primary" style={{ marginTop: '4px' }} disabled={loading}>
+            {loading ? 'Authenticating...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+          </button>
+        </form>
+        {msg.text && <div className={`msg ${msg.type}`}>{msg.text}</div>}
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+export { API };
+export default function App() {
+  const [token, setToken] = useState('');
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState('home');
+  const [apiUp, setApiUp] = useState(false);
+
+  useEffect(() => {
+    const check = async () => {
+      try { await axios.get(`${API}/health`, { timeout: 4000 }); setApiUp(true); }
+      catch { setApiUp(false); }
+    };
+    check();
+    const stored = localStorage.getItem('art_ai_token');
+    if (stored) {
+      setToken(stored);
+      axios.get(`${API}/users/me`, { headers: { Authorization: `Bearer ${stored}` } })
+        .then(r => setUser(r.data))
+        .catch(() => { localStorage.removeItem('art_ai_token'); setToken(''); });
+    }
+  }, []);
+
+  const logout = () => {
+    localStorage.removeItem('art_ai_token');
+    setToken(''); setUser(null); setView('home');
+  };
+
+  if (!token) return <AuthScreen onAuth={(t, u) => { setToken(t); setUser(u); }} />;
 
   return (
     <div className="app-shell">
       <div className="aurora aurora-one" />
       <div className="aurora aurora-two" />
-      <div className="grid-glow" />
-
-      <main className="app-frame">
-        <aside className="sidebar">
-          <div className="brand-block">
-            <div className="eyebrow">ART-AI</div>
-            <h2>Autonomous Security OS</h2>
-          </div>
-
-          <div className="user-card">
-            <div className="eyebrow">Operator</div>
-            <strong>{user?.name || 'Operator'}</strong>
-            <p>{user?.email || 'Signed in securely'}</p>
-            <p className="api-status-row" style={{ marginTop: '6px' }}>
-              <span className={`api-status-dot ${apiStatus === 'online' ? 'online' : 'offline'}`} />
-              <span>API</span>
-              <strong>{apiStatus === 'online' ? 'Online' : 'Offline'}</strong>
-            </p>
-          </div>
-
-          <nav className="nav-list">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                className={`nav-btn ${activeView === item.id ? 'active' : ''}`}
-                onClick={() => setActiveView(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
-          <div className="activity-card">
-            <div className="activity-header">
-              <div className="eyebrow">Activity</div>
-              <span className="activity-live">Live</span>
-            </div>
-            <div className="activity-list">
-              {activityLog.map((item) => (
-                <div key={item.id} className="activity-item">
-                  <div className="activity-meta">
-                    <strong>{item.text}</strong>
-                    <span>{item.time}</span>
-                  </div>
-                  <p>{item.detail}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button className="logout-btn" type="button" onClick={() => checkApiHealth()}>
-            Reconnect
-          </button>
-
-          <button className="logout-btn" type="button" onClick={handleLogout}>
-            Logout
-          </button>
-        </aside>
-
-        <section className="content-panel">
-          {renderView()}
-        </section>
+      <div className="grid-bg" />
+      <Sidebar view={view} setView={setView} user={user} apiUp={apiUp} logout={logout} />
+      <main className="content">
+        <PageRouter view={view} token={token} />
       </main>
     </div>
   );
 }
 
-export default App;
+function Sidebar({ view, setView, user, apiUp, logout }) {
+  const initials = user?.name ? user.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase() : 'OP';
+  return (
+    <aside className="sidebar">
+      <div className="brand">
+        <div className="brand-eye">ART-AI</div>
+        <h1>Autonomous Red Team</h1>
+        <p>Intelligence Platform</p>
+      </div>
+      {NAV.map(group => (
+        <div key={group.group} className="nav-group">
+          <div className="nav-group-label">{group.group}</div>
+          {group.items.map(item => (
+            <button key={item.id} className={`nav-btn${view === item.id ? ' active' : ''}`} onClick={() => setView(item.id)}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ))}
+      <div className="sidebar-footer">
+        <div className="user-pill">
+          <div className="user-avatar">{initials}</div>
+          <div className="user-info">
+            <div className="user-name">{user?.name || 'Operator'}</div>
+            <div className="user-role">{user?.role || 'operator'}</div>
+          </div>
+        </div>
+        <div className="status-row">
+          <div className={`api-dot${apiUp ? ' up' : ''}`} />
+          <span>API {apiUp ? 'Online' : 'Offline'}</span>
+        </div>
+        <button className="btn-ghost btn-danger" onClick={logout}>Sign Out</button>
+      </div>
+    </aside>
+  );
+}
+
+function PageRouter({ view, token }) {
+  const pages = {
+    home:       () => import('./pages/HomePage.jsx'),
+    scanner:    () => import('./pages/ScannerPage.jsx'),
+    simulation: () => import('./pages/SimulationPage.jsx'),
+    compliance: () => import('./pages/CompliancePage.jsx'),
+    chat:       () => import('./pages/ChatPage.jsx'),
+    studio:     () => import('./pages/HomePage.jsx'),
+  };
+  const [Page, setPage] = useState(null);
+  useEffect(() => {
+    const loader = pages[view] || pages.home;
+    loader().then(m => setPage(() => m.default));
+  }, [view]);
+  if (!Page) return <div style={{ padding: 40, color: 'var(--t2)' }}>Loading…</div>;
+  return <Page token={token} />;
+}
